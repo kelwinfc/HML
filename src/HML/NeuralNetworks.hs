@@ -1,4 +1,8 @@
-module HML.NeuralNetworks where
+module HML.NeuralNetworks(Neuron, LinearUnit(LinearU), StepUnit(StepU),
+                          SigmoidUnit(SigmoidU),
+                          MultiLayerPerceptron, createNeuralNetork,
+                          (~>))
+    where
 
 import HML.Prelude
 
