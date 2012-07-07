@@ -8,11 +8,22 @@ import qualified Numeric.Container as NC
 import qualified Data.Foldable as DF
 import qualified Data.Functor as DR
 
-hypothesis :: Vector Double -> Vector Double -> Double
+hypothesis :: Vector Double    -- x
+              -> Vector Double -- theta
+              -> Double        -- h_theta(x)
 hypothesis theta x = theta <.> x
 
-derivedJtheta :: (Vector Double -> Vector Double -> Double) -> Seq (Vector Double,Double) -> Vector Double -> Int -> Double
-derivedJtheta h tr th j =  (DF.sum $ DR.fmap ((th_j *) . (e th)) tr) / (toEnum m)
+derivedJtheta :: (Vector Double -> Vector Double -> Double) -- hypothesis function
+                 -> Seq (Vector Double,Double)              -- training set
+                 -> Vector Double                           -- theta
+                 -> Int                                     -- index j to calculate
+                 -> Double                                  -- value of derived cost function respect to theta_j 
+derivedJtheta h tr th j =  (DF.sum $ DR.fmap (e th j) tr) / (toEnum m)
    where m = DS.length tr
-         th_j = th @> j
-         e t (x,y) = (h x t) - y
+         e t j (x,y) = ((h x t) - y) * (x @> j)
+
+-- training :: Seq (Vector Double, Double) -- training set
+--              -> Double                  -- learning rate
+--              -> Vector Double           -- initial values of theta
+--              -> Vector Double           -- final values of theta
+-- training tr alpha th_ini = 
