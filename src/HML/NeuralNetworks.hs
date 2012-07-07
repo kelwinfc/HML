@@ -1,3 +1,7 @@
+module HML.NeuralNetworks where
+
+import HML.Prelude
+
 class Neuron a where
     
     (~>) :: [Double] -> a -> Double
@@ -30,6 +34,3 @@ createNeuralNetork :: [Int] -> MultiLayerPerceptron
 createNeuralNetork (x:xs) = ANN [] [[]]
 
 neuralDot a b = sum $ zipWith (*) (1:a) b
-
-main = do
-    putStrLn $ show $ [1,2,3] ~> LinearU [1,2,3,4]
