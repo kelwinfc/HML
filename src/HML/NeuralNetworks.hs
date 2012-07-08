@@ -4,7 +4,7 @@ module HML.NeuralNetworks(Neuron, LinearUnit(LinearU), StepUnit(StepU),
                           (~>), (~~>))
     where
 
-import HML.Prelude
+import PreludeHML
 import Data.List
 
 class Neuron a where
