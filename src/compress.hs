@@ -1,6 +1,8 @@
 import System( getArgs )
 import Data.List
 import HML.Kmeans
+import HML.PreludeHML
+import qualified Data.Sequence as DS
 
 import Control.Parallel
 import Control.Parallel.Strategies
@@ -34,4 +36,3 @@ main = do
     let ctr = initialCentroids 3 img
     let cntr = kmeans 100 16 img
     putStrLn $ show cntr
-    putStrLn "chao"
