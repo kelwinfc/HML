@@ -27,15 +27,40 @@ derivedJtheta h tr th j =  (DF.sum $ DR.fmap (e th j) tr) / (toEnum m)
    where m = DS.length tr
          e t j (x,y) = ((h t x) - y) * (x @> j)
 
-type LinearRegressionMonad = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double)
+--type LinearRegressionMonad = RWST SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) IO ()
+type LinearRegressionMonad = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
--- training :: LinearRegressionMonad
--- training = do
---   data_training <- ask
---   let ts = DR.fmap one $ training_set data_training
---   let alpha = learning_rate data_training
---   let i = iterations data_training
---   theta <- get
+training :: LinearRegressionMonad
+training = do
+  data_training <- ask
+  (theta,i) <- get
+  let it = iterations data_training
+  let trs = DR.fmap one (training_set data_training)
+  let tss = DR.fmap one (test_set data_training)
+  let alpha = learning_rate data_training
+  let parameters =  calculate_parameters alpha trs theta 0
+  let trs_get = DR.fmap (h parameters) trs
+  let tss_get = DR.fmap (h parameters) tss
+  let h_trs = DR.fmap fst trs_get
+  let y_trs = DR.fmap snd trs_get
+  let h_tss = DR.fmap fst tss_get
+  let y_tss = DR.fmap snd tss_get
+  tell $ DS.singleton (mse h_trs y_trs,mse h_tss y_tss)
+  put (parameters, i + 1)
+  if i == it
+    then do
+      return ()
+    else
+      training 
+    where h th (x,y) = (hypothesis th x,y)
+
+-- gradientDescent :: Double                         -- alpha
+--                    -> Seq (Vector Double, Double) -- training set
+--                    -> Vector Double               -- initial theta value
+--                    -> Int                         -- iterations
+--                    -> Vector Double               -- parameters and graphics
+-- gradientDescent _ _ th 0      = th
+-- gradientDescent alpha tr th i = gradientDescent alpha tr (calculate_parameters alpha tr th 0) (i - 1)
 
 one :: (Vector Double, Double) -> (Vector Double, Double) 
 one (x,y) = (join [fromList [1],x],y)
@@ -62,16 +87,16 @@ calculate_parameters alpha tr th_pr j =
          th_j = calculate_theta (th_pr @> j) alpha tr th_pr j
          sub_th = calculate_parameters alpha tr th_pr (j + 1) 
 
-theta :: Vector Double
-theta = fromList [1,1,1,1]
+is_theta :: Vector Double
+is_theta = fromList [1,1]
 x1 :: Vector Double
-x1 = fromList [40,20,40]
+x1 = fromList [3]
 x2 :: Vector Double
-x2 = fromList [20,10,30]
+x2 = fromList [4]
 x3 :: Vector Double
-x3 = fromList [10,10,10]
-y1 = 5.0
-y2 = 3.0
-y3 = 2.0
-training = DS.fromList [(x1,y1),(x2,y2),(x3,y3)]
-alpha = 0.01
+x3 = fromList [5]
+y1 = 4.0
+y2 = 5.0
+y3 = 6.0
+training__set = DS.fromList [(x1,y1),(x2,y2),(x3,y3)]
+is_alpha = 0.01
