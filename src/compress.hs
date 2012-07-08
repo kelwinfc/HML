@@ -32,6 +32,6 @@ main = do
     
     putStrLn "Image loaded"
     let ctr = initialCentroids 3 img
-    let cntr = kmeans 20 32 img
-    putStrLn $ show cntr   
+    let cntr = kmeans 100 16 img
+    putStrLn $ show cntr
     putStrLn "chao"
