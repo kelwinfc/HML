@@ -6,7 +6,7 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as DS
 import Data.Packed.Vector
 --import Data.Packed.Matrix
-import Numeric.Container ((<.>))
+import Numeric.Container ((<.>),constant)
 import qualified Numeric.Container as NC
 import qualified Data.Foldable as DF
 import qualified Data.Functor as DR
@@ -30,41 +30,6 @@ derivedJtheta h tr th j =  (DF.sum $ DR.fmap (e th j) tr) / (toEnum m)
 --type LinearRegressionMonad = RWST SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) IO ()
 type LinearRegressionMonad = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
-training :: LinearRegressionMonad
-training = do
-  data_training <- ask
-  (theta,i) <- get
-  let it = iterations data_training
-  let trs = DR.fmap one (training_set data_training)
-  let tss = DR.fmap one (test_set data_training)
-  let alpha = learning_rate data_training
-  let parameters =  calculate_parameters alpha trs theta 0
-  let trs_get = DR.fmap (h parameters) trs
-  let tss_get = DR.fmap (h parameters) tss
-  let h_trs = DR.fmap fst trs_get
-  let y_trs = DR.fmap snd trs_get
-  let h_tss = DR.fmap fst tss_get
-  let y_tss = DR.fmap snd tss_get
-  tell $ DS.singleton (mse h_trs y_trs,mse h_tss y_tss)
-  put (parameters, i + 1)
-  if i == it
-    then do
-      return ()
-    else
-      training 
-    where h th (x,y) = (hypothesis th x,y)
-
--- gradientDescent :: Double                         -- alpha
---                    -> Seq (Vector Double, Double) -- training set
---                    -> Vector Double               -- initial theta value
---                    -> Int                         -- iterations
---                    -> Vector Double               -- parameters and graphics
--- gradientDescent _ _ th 0      = th
--- gradientDescent alpha tr th i = gradientDescent alpha tr (calculate_parameters alpha tr th 0) (i - 1)
-
-one :: (Vector Double, Double) -> (Vector Double, Double) 
-one (x,y) = (join [fromList [1],x],y)
-
 calculate_theta :: Double                        -- previous theta value
                    -> Double                     -- alpha                                                
                    -> Seq (Vector Double,Double) -- training set
@@ -87,16 +52,59 @@ calculate_parameters alpha tr th_pr j =
          th_j = calculate_theta (th_pr @> j) alpha tr th_pr j
          sub_th = calculate_parameters alpha tr th_pr (j + 1) 
 
-is_theta :: Vector Double
-is_theta = fromList [1,1]
-x1 :: Vector Double
-x1 = fromList [3]
-x2 :: Vector Double
-x2 = fromList [4]
-x3 :: Vector Double
-x3 = fromList [5]
-y1 = 4.0
-y2 = 5.0
-y3 = 6.0
-training__set = DS.fromList [(x1,y1),(x2,y2),(x3,y3)]
-is_alpha = 0.01
+training :: LinearRegressionMonad
+training = do
+  data_training <- ask
+  (theta,i) <- get
+  let it = iterations data_training
+  if it /= 0 && i < it 
+    then do 
+      let trs = DR.fmap one (training_set data_training)
+      let tss = DR.fmap one (test_set data_training)
+      let alpha = learning_rate data_training
+      let parameters =  calculate_parameters alpha trs theta 0
+      let trs_get = DR.fmap (h parameters) trs
+      let tss_get = DR.fmap (h parameters) tss
+      let h_trs = DR.fmap fst trs_get
+      let y_trs = DR.fmap snd trs_get
+      let h_tss = DR.fmap fst tss_get
+      let y_tss = DR.fmap snd tss_get
+      tell $ DS.singleton (mse h_trs y_trs,mse h_tss y_tss)
+      put (parameters, i + 1)
+      training
+    else return ()
+  where h th (x,y) = (hypothesis th x,y)
+
+one (x,y) = (join [fromList [1],x],y)
+
+
+linearRegression :: Double                         -- learning rate
+                    -> Seq (Vector Double, Double) -- training set
+                    -> Seq (Vector Double, Double) -- test set
+                    -> Int                         -- number of features
+                    -> Int                         -- max number of iterations
+                    -> IO ()
+linearRegression alpha tr ts num_features i = do
+  let se = SupExp {training_set = tr, test_set = ts, 
+                   learning_rate = alpha, iterations = i}
+  let initial_theta = constant 1 (num_features + 1)
+  let (_,s,w) = runRWS training se (initial_theta,0)
+  print $ fst s
+  plotStats "Errors Graphics of Linear Regression" w
+      
+---------------- EXAMPLE
+
+f x = (fromList [x],-2+3*x)
+g x = (fromList [x],3+2*x)
+
+prueba_tr :: Seq (Vector Double, Double)
+prueba_tr = DR.fmap g $ DS.fromList [0.0,2.0,3.0,5.0]
+
+prueba_th :: Vector Double
+prueba_th = fromList [1,1]
+
+training__set :: Seq (Vector Double, Double)
+training__set = DR.fmap f $ DS.fromList [0.0..100.0]
+
+test__set :: Seq (Vector Double, Double)
+test__set = DR.fmap f $ DS.fromList [200.0..250.0]
