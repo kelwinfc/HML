@@ -1,12 +1,15 @@
 module LinearRegression where
 
+import Control.Monad.Writer hiding (join) 
+import Control.Monad.Reader hiding (join)
 import Control.Monad.RWS hiding (join)
 import Control.Parallel
 import Data.Sequence (Seq)
 import qualified Data.Sequence as DS
 import Data.Packed.Vector
---import Data.Packed.Matrix
-import Numeric.Container ((<.>),constant)
+import Data.Packed.Matrix
+import Numeric.LinearAlgebra.Algorithms
+import Numeric.Container ((<.>),constant,mXm,mXv)
 import qualified Numeric.Container as NC
 import qualified Data.Foldable as DF
 import qualified Data.Functor as DR
@@ -27,8 +30,7 @@ derivedJtheta h tr th j =  (DF.sum $ DR.fmap (e th j) tr) / (toEnum m)
    where m = DS.length tr
          e t j (x,y) = ((h t x) - y) * (x @> j)
 
---type LinearRegressionMonad = RWST SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) IO ()
-type LinearRegressionMonad = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
+type LinearRegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
 calculate_theta :: Double                        -- previous theta value
                    -> Double                     -- alpha                                                
@@ -52,8 +54,8 @@ calculate_parameters alpha tr th_pr j =
          th_j = calculate_theta (th_pr @> j) alpha tr th_pr j
          sub_th = calculate_parameters alpha tr th_pr (j + 1) 
 
-training :: LinearRegressionMonad
-training = do
+trainingGD :: LinearRegressionMonadGD
+trainingGD = do
   data_training <- ask
   (theta,i) <- get
   let it = iterations data_training
@@ -71,28 +73,55 @@ training = do
       let y_tss = DR.fmap snd tss_get
       tell $ DS.singleton (mse h_trs y_trs,mse h_tss y_tss)
       put (parameters, i + 1)
-      training
+      trainingGD
     else return ()
   where h th (x,y) = (hypothesis th x,y)
 
 one (x,y) = (join [fromList [1],x],y)
 
 
-linearRegression :: Double                         -- learning rate
+linearRegressionGD :: Double                       -- learning rate
                     -> Seq (Vector Double, Double) -- training set
                     -> Seq (Vector Double, Double) -- test set
                     -> Int                         -- number of features
                     -> Int                         -- max number of iterations
                     -> IO ()
-linearRegression alpha tr ts num_features i = do
+linearRegressionGD alpha tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, iterations = i}
   let initial_theta = constant 1 (num_features + 1)
-  let (_,s,w) = runRWS training se (initial_theta,0)
+  let (_,s,w) = runRWS trainingGD se (initial_theta,0)
   print $ fst s
-  plotStats "Errors Graphics of Linear Regression" w
+  plotStats "Errors Graphics of Linear Regression.png" w
       
----------------- EXAMPLE
+
+trainingSet2MatrixVector :: Seq (Vector Double, Double)       -- training set
+                            -> (Matrix Double, Vector Double) -- desing matrix and y
+trainingSet2MatrixVector s = (fromRows m, fromList v)
+  where (m,v) = DF.foldl' (\(x',y') (x,y) -> (x'++[x],y'++[y])) ([],[]) s
+
+type LinearRegressionMonadNE = Reader SupervisedExperiment (Vector Double)
+
+trainingNE :: LinearRegressionMonadNE
+trainingNE = do
+  data_training <- ask
+  let trs = DR.fmap one (training_set data_training)
+  let tss = DR.fmap one (test_set data_training)
+  let (x,y) = trainingSet2MatrixVector trs
+  let theta = parameters x y
+  return theta
+    where parameters m v = ((inv ((trans m) `mXm` m)) `mXm` (trans m)) `mXv` v
+
+linearRegressionNE :: Seq (Vector Double, Double) -- training set
+                     -> Seq (Vector Double, Double) -- test set
+                     -> Int                         -- number of features
+                     -> IO ()
+linearRegressionNE tr ts num_features = do
+  let se = SupExp {training_set = tr, test_set = ts, 
+                   learning_rate = 0.0, iterations = 0}
+  print $ runReader trainingNE se
+
+---------------- EXAMPLE 
 
 f x = (fromList [x],-2+3*x)
 g x = (fromList [x],3+2*x)
