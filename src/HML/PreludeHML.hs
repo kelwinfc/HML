@@ -15,6 +15,7 @@ import qualified Data.Foldable as DF
 data SupervisedExperiment = SupExp { training_set  :: Seq (Vector Double,Double),
                                      test_set      :: Seq (Vector Double,Double),
                                      learning_rate :: Double,
+                                     regularization_parameter :: Double,
                                      iterations    :: Int
                                    }
 
