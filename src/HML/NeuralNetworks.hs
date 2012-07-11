@@ -1,8 +1,8 @@
-module HML.NeuralNetworks(Neuron, LinearUnit(LinearU), StepUnit(StepU),
-                          SigmoidUnit(SigmoidU),
-                          NeuralNetwork(ANN), createNeuralNetork,
-                          (~>), (~~>))
-    where
+-- module HML.NeuralNetworks(Neuron, LinearUnit(LinearU), StepUnit(StepU),
+--                           SigmoidUnit(SigmoidU),
+--                           NeuralNetwork(ANN), createNeuralNetork,
+--                           (~>), (~~>))
+--     where
 
 import PreludeHML
 import Data.List
@@ -16,11 +16,13 @@ class Neuron a where
     (<~) neuron entries = entries ~> neuron
 
 data LinearUnit = LinearU [Double]
+    deriving Show
 
 instance Neuron LinearUnit where
     (~>) entries (LinearU weights) = neuralDot entries weights
 
 data StepUnit = StepU Double [Double]
+    deriving Show
 
 instance Neuron StepUnit where
     (~>) entries (StepU theta weights) = 
@@ -28,15 +30,19 @@ instance Neuron StepUnit where
                                                     else 0.0
 
 data SigmoidUnit = SigmoidU [Double]
+    deriving Show
 
 instance Neuron SigmoidUnit where
     (~>) entries (SigmoidU weights) =
         1.0 / ( 1.0 + (exp (- (neuralDot entries weights) )))
 
-data NeuralNetwork = ANN [LinearUnit] [[SigmoidUnit]]
+data NeuralNetwork = ANN Int [[SigmoidUnit]]
+    deriving Show
 
 createNeuralNetork :: [Int] -> NeuralNetwork
-createNeuralNetork (x:xs) = ANN [] [[]]
+createNeuralNetork l@(input_size:xs) = ANN input_size a
+    where a = map (\(p,c) -> replicate c (SigmoidU $ [0.0..fromIntegral p] ))
+                  (zip (init l) xs)
 
 neuralDot a b = sum $ zipWith (*) (1:a) b
 
@@ -44,19 +50,20 @@ outputLayer :: Neuron a => [Double] -> [a] -> [Double]
 outputLayer entries = map (entries ~>)
 
 (~~>) :: [Double] -> NeuralNetwork -> [Double]
-(~~>) a (ANN entry hidden) = foldl' outputLayer
-                                    (outputLayer a entry)
-                                    hidden
+(~~>) a (ANN nentries hidden) = foldl' outputLayer
+                                       a
+                                       hidden
 
 outputs :: [Double] -> NeuralNetwork -> [[Double]]
-outputs a (ANN e h) = scanl outputLayer (outputLayer a e) h
+outputs a (ANN ne h) = scanl outputLayer a h
 
 deltas ::  [Double]         -- Target function
         -> [[SigmoidUnit]]  -- hidden and output Units
         -> [[Double]]       -- Outputs
         -> [[Double]]       -- Deltas
 
-deltas target _ [o]   = [zipWith (\s y -> s * (1 - s) * (y - s)) o target]
+deltas target _ [o]   = [ zipWith (\s y -> s * (1 - s) * (y - s)) o target ]
+
 deltas target (wh: w_hs@(w_next:_) ) (o_h : o_hs@(o_next:_) ) =
         (zipWith (*) accum o_aux) : delta_hs
     
@@ -64,7 +71,7 @@ deltas target (wh: w_hs@(w_next:_) ) (o_h : o_hs@(o_next:_) ) =
           delta_hs@(d_next:_) = deltas target w_hs o_hs
           
           o_aux :: [Double]
-          o_aux = map (\x -> x*(1-x)) o_next
+          o_aux = map (\x -> x*(1-x)) o_h
           
           accum :: [Double]
           accum = foldl1 (zipWith (+)) weights_times_deltas
@@ -73,6 +80,43 @@ deltas target (wh: w_hs@(w_next:_) ) (o_h : o_hs@(o_next:_) ) =
           weights_times_deltas = zipWith (\(SigmoidU (_:w) ) d -> map (*d) w)
                                          w_next d_next
 
+
+--updateWeights :: [[Double]] -> [[Double]] -> NeuralNetwork -> NeuralNetwork
+--updateWeights deltas outputs _ = error $ (show $ length deltas) ++ " " ++ (show $ length outputs)
+-- updateWeights d o (ANN i w) = ANN i (map updateW (zip d (init o)))
+--     where updateW (d,x) = 
+-- updateWeights [] _ (ANN i _) = ANN i []
+-- updateWeights deltas outputs (ANN i x) = ANN i x
+--     where 
+
+getDiffs :: [Double]      -- Vector de Entrada
+         -> [Double]      -- Vector de Salidas Esperadas
+         -> NeuralNetwork -- Red Neural
+         -> NeuralNetwork -- Red Neural de diferenciales de pesos
+getDiffs entry target nn = ANN input_units diff
+    where (ANN input_units units) = nn
+          o = entry `outputs` nn
+          d = deltas target units (tail o)
+          odu = zipWith (\x (y,n) -> (map (\z -> (x,z,n)) y)) (init o)
+                  (map (\x -> (d,x)) units )
+          entries = init o
+          unitAndAlphaDelta = map (\(x,y) -> zip x (map (*alpha) y )) (zip units d)
+          diff = map (\(i,u) -> map 
+             (\(SigmoidU a,b) -> (SigmoidU $ map (*b) $ zipWith (*) (1:i) a)) u)
+             (zip entries unitAndAlphaDelta)
+
+alpha = 0.1
+
+
+
+
+
+--x = updateWeights d outs nn
+    
+          
+          
+          
+{-
 add_delta :: SigmoidUnit -> Double -> [Double] -> SigmoidUnit
 add_delta (SigmoidU weights) alpha delta = 
     SigmoidU (zipWith (\w d -> w + alpha*d) weights delta)
@@ -83,6 +127,7 @@ new_weights (ANN l (h:hs)) alpha (dl:dls) = ANN l (new_layer:aux)
     where new_layer = zipWith go h dl
           go n d = add_delta n alpha d
           ANN _ aux = new_weights (ANN l hs) alpha dls
+-}
 
 {-
 backProp :: Double -> NeuralNetwork -> [([Double],Double)] -> NeuralNetwork

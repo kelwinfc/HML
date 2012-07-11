@@ -19,20 +19,22 @@ reshape 0    _    _ = []
 reshape rows cols a = (take cols a):a'
     where a' = reshape (rows-1) cols (drop cols a)
 
-loadData = do
-    --args <- getArgs
-    let args = ["../test/rott.img"]
-    s <- readFile $ args !! 0
+loadData filepath = do
+    s <- readFile filepath
     
     let [n,m]:content = ((map ((map read ). words) $ lines s)::[[Double]]) 
                             `using` rdeepseq
     let img = content
-    return img
+    return ((n,m),img)
+
+dumpData filepath p (n,m) = do
+    writeFile filepath ( show (round n) ++ " " ++ show (round m) ++ "\n"
+                            ++ (concat $ intersperse "\n" $ map (concat . intersperse " " . (map (show.round))) p))
 
 main = do
-    img <- loadData
-    
+    args <- getArgs
+    ((n,m),img) <- loadData (head args)
     putStrLn "Image loaded"
     let ctr = initialCentroids 3 img
-    let cntr = kmeans 100 16 img
-    putStrLn $ show cntr
+    let cntr = kmeans 50 16 img
+    dumpData (args !! 1) (getLeaders cntr img) (n,m)
