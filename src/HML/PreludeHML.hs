@@ -3,6 +3,7 @@ module PreludeHML where
 import Control.Parallel
 import Control.Parallel.Strategies
 import qualified Data.List as DL
+import Numeric.Container 
 import Data.Packed.Vector (Vector)
 import qualified Data.Sequence as DS  
 import Data.Sequence (Seq,splitAt)

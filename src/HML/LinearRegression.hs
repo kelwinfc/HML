@@ -1,4 +1,4 @@
-module LinearRegression where
+module LinearRegression(linearRegressionGD,linearRegressionNE,(~>),linearRegression) where
 
 import Control.Monad.Reader hiding (join)
 import Control.Monad.RWS hiding (join)
@@ -18,14 +18,14 @@ import Numeric.Container
 import qualified Data.Foldable as DF
 import qualified Data.Functor as DR
 
+import Graphics.Gnuplot.Simple
+
 import PreludeHML
 
-type LinearRegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
-
-hypothesis :: Vector Double    -- theta
+(~>) :: Vector Double    -- theta
               -> Vector Double -- x
               -> Double        -- h_theta(x)
-hypothesis theta x = theta <.> x
+(~>) theta x = theta <.> x
 
 derivedJtheta :: (Vector Double -> Vector Double -> Double) -- hypothesis function
                  -> Seq (Vector Double,Double)              -- training set
@@ -45,7 +45,7 @@ calculate_theta :: Double                        -- previous theta value
                    -> Int                        -- index j to calculate
                    -> Double                     -- new theta
 calculate_theta th_pr alpha lambda tr th j = 
-  th_pr - (alpha * (derivedJtheta hypothesis tr th lambda j))
+  th_pr - (alpha * (derivedJtheta (~>) tr th lambda j))
   
 calculate_parameters :: Double                        -- alpha
                         -> Double                     -- lambda
@@ -60,6 +60,8 @@ calculate_parameters alpha lambda tr th_pr j =
   where  n      = dim th_pr - 1
          th_j   = calculate_theta (th_pr @> j) alpha lambda tr th_pr j
          sub_th = (calculate_parameters alpha lambda tr th_pr (j + 1))
+
+type LinearRegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
 trainingGD :: LinearRegressionMonadGD
 trainingGD = do
@@ -85,8 +87,10 @@ trainingGD = do
       put (new_theta, i + 1)
       trainingGD
     else return ()
-  where h th (x,y) = (hypothesis th x,y)
+  where h th (x,y) = (th ~> x,y)
 
+one :: (Vector Double, Double) 
+       -> (Vector Double, Double)
 one (x,y) = (join [fromList [1],x],y)
 
 linearRegressionGD :: Double                         -- learning rate
@@ -95,16 +99,15 @@ linearRegressionGD :: Double                         -- learning rate
                       -> Seq (Vector Double, Double) -- test set
                       -> Int                         -- number of features
                       -> Int                         -- max number of iterations
-                      -> IO ()
+                      -> Vector Double
 linearRegressionGD alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = constant 1 (num_features + 1)
-  let (_,s,w) = runRWS trainingGD se (initial_theta,0)
-  print $ fst s
-  plotStats "Errors Graphics of Linear Regression.png" w
-      
+  let (s,w) = execRWS trainingGD se (initial_theta,0)
+  fst s
+
 trainingSet2MatrixVector :: Seq (Vector Double, Double)       -- training set
                             -> (Matrix Double, Vector Double) -- desing matrix and y
 trainingSet2MatrixVector s = (fromRows m, fromList v)
@@ -116,7 +119,6 @@ trainingNE :: LinearRegressionMonadNE
 trainingNE = do
   data_training <- ask
   let trs = DR.fmap one (training_set data_training)
-  let tss = DR.fmap one (test_set data_training)
   let lambda = regularization_parameter data_training
   let (x,y) = trainingSet2MatrixVector trs
   let theta = parameters lambda x y
@@ -128,23 +130,36 @@ linearRegressionNE :: Double                         -- regularization parameter
                       -> Seq (Vector Double, Double) -- training set
                       -> Seq (Vector Double, Double) -- test set
                       -> Int                         -- number of features
-                      -> IO ()
+                      -> Vector Double
 linearRegressionNE lambda tr ts num_features = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = 0.0, regularization_parameter = lambda,
                    iterations = 0}
-  print $ runReader trainingNE se
+  runReader trainingNE se
+
+linearRegression :: Double                          -- learning rate
+                    -> Double                       -- regularization parameter
+                    -> Seq (Vector Double, Double)  -- training set
+                    -> Seq (Vector Double, Double)  -- test set
+                    -> Int                          -- number of features
+                    -> Int                          -- iterations
+                    -> Vector Double
+linearRegression alpha lambda tr ts f i = if f < 1000 
+                                        then (linearRegressionGD alpha lambda tr ts f i)
+                                        else (linearRegressionNE lambda tr ts f)
 
 ---------------- EXAMPLE 
 
 f x = (fromList [x],-2+3*x)
 g x = (fromList [x],3+2*x)
 
+(<<) x y = if x < y then (fromList[x,y],1.0) else (fromList[x,y],0.0)
+
 prueba_tr :: Seq (Vector Double, Double)
 prueba_tr = DR.fmap g $ DS.fromList [0.0,2.0,3.0,5.0]
 
-prueba_th :: Vector Double
-prueba_th = fromList [1,1]
+prueba_ts :: Seq (Vector Double, Double)
+prueba_ts = DR.fmap g $ DS.fromList [10.0,12.0,13.0,15.0]
 
 training__set :: Seq (Vector Double, Double)
 training__set = DR.fmap f $ DS.fromList [0.0..100.0]
