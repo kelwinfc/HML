@@ -1,9 +1,9 @@
-module LinearRegression(linearRegression,
-                        linearRegressionGD,
-                        linearRegressionGDWithStats,
-                        linearRegressionNE,
-                        (~>),(<~)) 
-       where
+module HML.LinearRegression (linearRegression,
+                             linearRegressionGD,
+                             linearRegressionGDWithStats,
+                             linearRegressionNE,
+                             (~>),(<~))
+where
 
 import Control.Monad.Reader hiding (join)
 import Control.Monad.RWS hiding (join)
@@ -24,8 +24,8 @@ import qualified Data.Functor as DR
 
 import Graphics.Gnuplot.Simple
 
-import PreludeHML
-import Regression
+import HML.PreludeHML
+import HML.Regression
 
 hypothesis :: Vector Double    -- theta
               -> Vector Double -- x

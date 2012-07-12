@@ -1,4 +1,4 @@
-module PreludeHML where
+module HML.PreludeHML where
 
 import Control.Parallel
 import Control.Parallel.Strategies

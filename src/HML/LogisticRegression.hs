@@ -1,10 +1,10 @@
-module LogisticRegression(logisticRegression,
-                          logisticRegressionWithStats,
-                          (~>),(<~)) 
-       where
+module HML.LogisticRegression (logisticRegression,
+                               logisticRegressionWithStats,
+                               (~>),(<~)) 
+where
 
-import Regression
-import PreludeHML
+import HML.Regression
+import HML.PreludeHML
 
 import Data.Packed.Vector
 import Numeric.Container

@@ -1,4 +1,4 @@
-module Regression where
+module HML.Regression where
 
 import Data.Packed.Vector
 
@@ -13,7 +13,7 @@ import qualified Data.Sequence as DS
 
 import Control.Monad.RWS hiding (join)
 
-import PreludeHML
+import HML.PreludeHML
 
 type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
