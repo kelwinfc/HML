@@ -53,7 +53,7 @@ linearRegressionGD alpha lambda tr ts num_features i = do
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = constant 0 (num_features + 1)
-  let (s,_) = execRWS (trainingGD hypothesis) se (initial_theta,0)
+  let (s,_) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
   fst s
 
 linearRegressionGDWithStats :: Double                         -- learning rate
@@ -68,7 +68,7 @@ linearRegressionGDWithStats alpha lambda tr ts num_features i = do
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = constant 0 (num_features + 1)
-  let (s,w) = execRWS (trainingGD hypothesis) se (initial_theta,0)
+  let (s,w) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
   plotStats "Graphics Errors of Linear Regression.png" w
   return $ fst s
 

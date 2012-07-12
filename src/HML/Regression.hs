@@ -15,24 +15,25 @@ import qualified Data.List as DL
 
 import Control.Monad.RWS hiding (join)
 
+import Test.QuickCheck
+import Test.QuickCheck.Arbitrary
+
 import HML.PreludeHML
 
-type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
-
--- (c theta h trs) > (1 / (10^3)) && 
+type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) () 
 
 trainingGD :: (Vector Double -> Vector Double -> Double) 
-              -- -> (Vector Double 
-              --     -> (Vector Double -> Vector Double -> Double) 
-              --     -> Seq (Vector Double, Double) 
-              --     -> Double
+              -> (Vector Double 
+                  -> (Vector Double -> Vector Double -> Double) 
+                  -> Seq (Vector Double, Double) 
+                  -> Double)
               -> RegressionMonadGD
-trainingGD h = do
+trainingGD h c = do
   data_training <- ask
   (theta,i) <- get
   let trs = DR.fmap one (training_set data_training)  
   let it = iterations data_training       
-  if it /= 0 && i < it
+  if (c theta h trs) > (1 / (10^3)) && it /= 0 && i < it
     then do 
       let tss = DR.fmap one (test_set data_training)
       let alpha = learning_rate data_training
@@ -60,7 +61,7 @@ trainingGD h = do
       let y_tss = DR.fmap snd tss_get
       tell $ DS.singleton (mse h_trs y_trs,mse h_tss y_tss)
       put (new_theta, i + 1)
-      trainingGD h
+      trainingGD h c
     else return ()
   where h' th (x,y) = (h th x,y)
 
@@ -76,7 +77,7 @@ derivedJtheta :: (Vector Double -> Vector Double -> Double) -- hypothesis functi
                  -> Double                                  -- value of derived cost function respect to theta_j 
 derivedJtheta h tr th lambda j =  ((DF.sum $ DR.fmap (e th j) tr) + lambda * (th @> j))/ (toEnum m)
    where m = DS.length tr
-         e t j (x,y) = ((h t x) - y) * (x @> j)
+         e t j (x,y) = (y - (h t x)) * (x @> j)
 
 calculate_theta :: (Vector Double -> Vector Double -> Double) -- hypothesis function
                    -> Double                     -- previous theta value
@@ -112,3 +113,11 @@ splitInThunks n l = DL.unfoldr go l
                   then Nothing
                   else Just (sp xs)
           sp xs = DS.splitAt n xs
+          
+initializeParameter' :: Int -> Double -> Vector Double
+initializeParameter' 1 = do 
+  s <- sample' (arbitrary :: Gen Double)
+  return (scalar (s !! 6) :: Vector Double)
+initializeParameter' n = do
+  s <- sample' (arbitrary :: Gen Double)
+  (join [(scalar (s !! 6) :: Vector Double),initializeParameter' (n -1)])
