@@ -1,6 +1,7 @@
 module HML.Regression where
 
 import Data.Packed.Vector
+import Numeric.LinearAlgebra
 
 import qualified Data.Foldable as DF
 import qualified Data.Functor as DR
@@ -10,6 +11,7 @@ import Control.Parallel.Strategies
 
 import Data.Sequence (Seq)
 import qualified Data.Sequence as DS
+import qualified Data.List as DL
 
 import Control.Monad.RWS hiding (join)
 
@@ -17,23 +19,37 @@ import HML.PreludeHML
 
 type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
+-- (c theta h trs) > (1 / (10^3)) && 
+
 trainingGD :: (Vector Double -> Vector Double -> Double) 
+              -- -> (Vector Double 
+              --     -> (Vector Double -> Vector Double -> Double) 
+              --     -> Seq (Vector Double, Double) 
+              --     -> Double
               -> RegressionMonadGD
 trainingGD h = do
   data_training <- ask
   (theta,i) <- get
-  let it = iterations data_training
-  if it /= 0 && i < it 
+  let trs = DR.fmap one (training_set data_training)  
+  let it = iterations data_training       
+  if it /= 0 && i < it
     then do 
-      let trs = DR.fmap one (training_set data_training)
       let tss = DR.fmap one (test_set data_training)
       let alpha = learning_rate data_training
       let lambda = regularization_parameter data_training
       
+      -- Division en grupo del training set
+      let trs' = splitInThunks it trs
+
       -- Calculo de la nueva funcion de hipotesis
-      let theta_0 = calculate_theta h (theta @> 0) alpha 0.0 trs theta 0
-      let parameters =  calculate_parameters h alpha lambda trs theta 1
-      let new_theta = join [fromList[theta_0],parameters]
+      let n = toEnum it
+      let theta_0 = map (\t -> calculate_theta h (theta @> 0) alpha 0.0 t theta 0) trs'
+      let new_theta_0 = (sum theta_0) / n
+
+      let parameters =  map (\t -> calculate_parameters h alpha lambda t theta 1) trs'
+      let new_parameters = mapVector ((flip (/)) n) $ DL.foldr1 add parameters
+
+      let new_theta = join [fromList[new_theta_0],new_parameters]
       
       -- Calculo del error
       let trs_get = DR.fmap (h' new_theta) trs
@@ -71,7 +87,7 @@ calculate_theta :: (Vector Double -> Vector Double -> Double) -- hypothesis func
                    -> Int                        -- index j to calculate
                    -> Double                     -- new theta
 calculate_theta h th_pr alpha lambda tr th j = 
-  th_pr - (alpha * (derivedJtheta h tr th lambda j))
+  th_pr + (alpha * (derivedJtheta h tr th lambda j))
   
 calculate_parameters :: (Vector Double -> Vector Double -> Double) -- hypothesis function
                         -> Double                     -- alpha
@@ -87,3 +103,12 @@ calculate_parameters h alpha lambda tr th_pr j =
   where  n      = dim th_pr - 1
          th_j   = calculate_theta h (th_pr @> j) alpha lambda tr th_pr j
          sub_th = (calculate_parameters h alpha lambda tr th_pr (j + 1))
+
+splitInThunks :: Int       -- ^ Tamaño de cada grupo
+              -> Seq (Vector Double, Double)       -- ^ Secuencia de datos
+              -> [Seq (Vector Double, Double)]     -- ^ Grupos de datos
+splitInThunks n l = DL.unfoldr go l
+    where go xs = if DS.null $ fst $ sp xs
+                  then Nothing
+                  else Just (sp xs)
+          sp xs = DS.splitAt n xs

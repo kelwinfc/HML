@@ -2,7 +2,9 @@ module HML.LinearRegression (linearRegression,
                              linearRegressionGD,
                              linearRegressionGDWithStats,
                              linearRegressionNE,
-                             (~>),(<~))
+                             (~>),(<~),
+                             trainingSet2MatrixVector,
+                             hypothesis)
 where
 
 import Control.Monad.Reader hiding (join)
@@ -50,7 +52,7 @@ linearRegressionGD alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 1 (num_features + 1)
+  let initial_theta = constant 0 (num_features + 1)
   let (s,_) = execRWS (trainingGD hypothesis) se (initial_theta,0)
   fst s
 
@@ -65,7 +67,7 @@ linearRegressionGDWithStats alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 1 (num_features + 1)
+  let initial_theta = constant 0 (num_features + 1)
   let (s,w) = execRWS (trainingGD hypothesis) se (initial_theta,0)
   plotStats "Graphics Errors of Linear Regression.png" w
   return $ fst s
@@ -90,11 +92,10 @@ trainingNE = do
 
 linearRegressionNE :: Double                         -- regularization parameter
                       -> Seq (Vector Double, Double) -- training set
-                      -> Seq (Vector Double, Double) -- test set
                       -> Int                         -- number of features
                       -> Vector Double
-linearRegressionNE lambda tr ts num_features = do
-  let se = SupExp {training_set = tr, test_set = ts, 
+linearRegressionNE lambda tr num_features = do
+  let se = SupExp {training_set = tr, test_set = DS.empty, 
                    learning_rate = 0.0, regularization_parameter = lambda,
                    iterations = 0}
   runReader trainingNE se
@@ -108,4 +109,12 @@ linearRegression :: Double                          -- learning rate
                     -> Vector Double
 linearRegression alpha lambda tr ts f i = if f < 1000 
                                         then (linearRegressionGD alpha lambda tr ts f i)
-                                        else (linearRegressionNE lambda tr ts f)
+                                        else (linearRegressionNE lambda tr f)
+
+costFunction :: Vector Double -- thetas
+                -> (Vector Double -> Vector Double -> Double)
+                -> Seq (Vector Double, Double)
+                -> Double
+costFunction th h tr = (1 / toEnum (2 * m)) * (DF.sum $ DR.fmap h' tr) 
+  where m = DS.length tr
+        h' (x,y) = ((h th x) - y) ^ 2
