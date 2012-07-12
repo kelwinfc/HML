@@ -20,6 +20,12 @@ data SupervisedExperiment = SupExp { training_set  :: Seq (Vector Double,Double)
                                      iterations    :: Int
                                    }
 
+data MultivalueSupExp = MSupExp { training      :: [ ([Double],[Double]) ],
+                                  test          :: [ ([Double],[Double]) ],
+                                  alpha         :: Double,
+                                  max_it        :: Int
+                                }
+
 jobSize = 1000000
 
 mse :: Seq Double -> Seq Double -> Double

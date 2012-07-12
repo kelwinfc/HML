@@ -74,9 +74,13 @@ trainingGD = do
       let tss = DR.fmap one (test_set data_training)
       let alpha = learning_rate data_training
       let lambda = regularization_parameter data_training
+      
+      -- Calculo de la nueva funcion de hipotesis
       let theta_0 = calculate_theta (theta @> 0) alpha 0.0 trs theta 0
       let parameters =  calculate_parameters alpha lambda trs theta 1
       let new_theta = join [fromList[theta_0],parameters]
+      
+      -- Calculo del error
       let trs_get = DR.fmap (h new_theta) trs
       let tss_get = DR.fmap (h new_theta) tss
       let h_trs = DR.fmap fst trs_get
