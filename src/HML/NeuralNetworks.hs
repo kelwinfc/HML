@@ -4,7 +4,7 @@ module HML.NeuralNetworks
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary
 
-import PreludeHML
+import HML.PreludeHML
 import Data.List
 
 import Control.Monad.Reader hiding (join)
@@ -54,7 +54,7 @@ createNeuralNetwork' i [] = do
     return (ANN i [])
 createNeuralNetwork' i (x:xs) = do
         bigList <- ( sample' $ vectorOf x $ vectorOf (i+1) $
-                         choose (-0.1,0.2) )::IO [[[Double]]]
+                         choose (-0.5,0.5) )::IO [[[Double]]]
         let units = map (\a -> SigmoidU a) (head bigList)
         (ANN _ sub) <- createNeuralNetwork' x xs
         return $ ANN i (units:sub)
@@ -139,8 +139,15 @@ backprop = do
     then do
         let training_s   = training config
         let test_s       = test config
-        let new_nn = foldl' (\prev_n t -> backProp' (alpha config) prev_n t) nn training_s
-        tell $ DS.singleton (0.0,0.0)
+        let new_nn = foldl' (\prev_n t -> backProp' (alpha config) prev_n t) 
+                            nn training_s
+        
+        let out_tr = map (\x -> x ~~> new_nn) (map fst training_s)
+        let out_ts = map (\x -> x ~~> new_nn) (map fst test_s)
+        tell $ DS.singleton (mseMatrix out_tr (map snd training_s),
+                             mseMatrix out_ts (map snd test_s)
+                            )
+        
         put $ (new_nn, i + 1)
         backprop
     else
@@ -148,11 +155,11 @@ backprop = do
 
 backProp' :: Double -> NeuralNetwork -> ([Double],[Double]) -> NeuralNetwork
 backProp' alpha nn@(ANN i nss) (xs,ys) = ANN i [aux (head nss) ds_hidden (1:xs),
-                                                aux (nss !! 1) ds_out (1:output_hidden)]
-    where output_hidden = outputLayer xs (head nss)
-          output_out    = outputLayer output_hidden (nss !! 1)
-          ds_out = zipWith (\s y -> s * (1-s)*(y-s)) output_out ys
-          ds_hidden = zipWith (\x s -> x * (1-x) * s) output_hidden 
+                                                aux (nss !! 1) ds_out (1:out_hidden)]
+    where out_hidden = outputLayer xs (head nss)
+          out_out    = outputLayer out_hidden (nss !! 1)
+          ds_out = zipWith (\s y -> s * (1-s)*(y-s)) out_out ys
+          ds_hidden = zipWith (\x s -> x * (1-x) * s) out_hidden 
                           $ map (sum . zipWith (*) ds_out) . transpose $ weights !! 1
           weights = map (map (\(SigmoidU w) -> w)) nss
           
@@ -174,38 +181,41 @@ backPropU alpha nss (xs, ys) = [aux (head nss) ds_hidden xs
       aux ns ds xs = zipWith (\n d -> n { weights = zipWithU (\w x -> w + alpha * d * x) (weights n) xs }) ns (fromU ds)
 
 -}
-backpropagation :: Double                         -- learning rate
+backpropagation :: String                         -- Plot name
+                -> Double                         -- learning rate
                 -> [([Double],[Double])]          -- training set
                 -> [([Double],[Double])]          -- test set
                 -> Int                            -- max number of iterations
                 -> [Int]                          -- topology
-                -> IO ()
+                -> IO (NeuralNetwork)
 
-backpropagation a tr ts i topology = do
+backpropagation plot_name a tr ts i topology = do
   let se = MSupExp { training = tr, test = ts, alpha = a,
                      max_it = i}
   initial_nn <- createNeuralNetwork topology
   let (_,(s,_),w) = runRWS backprop se (initial_nn,0)
+  plotStats plot_name w
+  return s
+--   print $ round $ head $ [0.0,0.0] ~~> s
+--   print $ round $ head $ [0.0,1.0] ~~> s
+--   print $ round $ head $ [1.0,0.0] ~~> s
+--   print $ round $ head $ [1.0,1.0] ~~> s
+--   print $ round $ head $ [2.0,4.0] ~~> s
+--   print $ round $ head $ [6.0,1.0] ~~> s
+--   print $ round $ head $ [1.0,10.0] ~~> s
+--   print $ round $ head $ [4.0,1.0] ~~> s
+--   print $ round $ head $ [40.0,1.0] ~~> s
+--   print $ round $ head $ [1.0,40.0] ~~> s
   
-  print $ round $ head $ [0.0,0.0] ~~> s
-  print $ round $ head $ [0.0,1.0] ~~> s
-  print $ round $ head $ [1.0,0.0] ~~> s
-  print $ round $ head $ [1.0,1.0] ~~> s
---   print $ [2.0,4.0] ~~> s
---   print $ [6.0,1.0] ~~> s
---   print $ [1.0,10.0] ~~> s
---   print $ [4.0,1.0] ~~> s
---   print $ [40.0,1.0] ~~> s
---   print $ [1.0,40.0] ~~> s
 
---andTr = [ ([i,j], [if i < j then 0.0 else 1.0]) | i <- [fromIntegral 0.. fromIntegral 10] , j <- [fromIntegral  0.. fromIntegral 10] ]
+andTr = [ ([i,j], [if i < j then 0.0 else 1.0]) | i <- [fromIntegral 0.. fromIntegral 10] , j <- [fromIntegral  0.. fromIntegral 10] ]
 andTs = andTr
-andTr = [([0.0,0.0],[1.0]),
-         ([0.0,1.0],[0.0]),
-         ([1.0,0.0],[0.0]),
-         ([1.0,1.0],[1.0])
-        ]
-x = backpropagation 0.6 andTr andTs 5000 [2,10,1]
+-- andTr = [([0.0,0.0],[1.0]),
+--          ([0.0,1.0],[0.0]),
+--          ([1.0,0.0],[0.0]),
+--          ([1.0,1.0],[1.0])
+--         ]
+x = backpropagation "" 0.6 andTr andTs 100 [2,10,1]
 
 y = do
     nn <- createNeuralNetwork [1,3,1]
