@@ -39,6 +39,11 @@ parMSE s = do
         q = foldl' (\a (x,y) -> a + (x-y)*(x-y)) 0.0 left
         (left,right) = splitAt jobSize s
 
+mseMatrix :: [[Double]] -> [[Double]] -> Double
+mseMatrix a b = (DL.foldl' (+) 0 (zipWith (\x y -> mse (DS.fromList x)
+                                                       (DS.fromList y))
+                                                       a b)) / 2.0
+
 plotStats :: String -> DS.Seq (Double, Double) -> IO()
 plotStats pathfile stats = do 
     plotPaths [PNG pathfile, XLabel "Iterations", YLabel "MSE"]
