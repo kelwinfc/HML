@@ -44,7 +44,7 @@ logisticRegression alpha lambda tr num_features i = do
   let se = SupExp {training_set = tr, test_set = empty, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 0 (num_features + 1)
+  let initial_theta = randomVector i Gaussian (num_features + 1)
   let (s,_) = execRWS (trainingGD hypothesis costFunction)  se (initial_theta,0)
   fst s
   
@@ -60,7 +60,7 @@ logisticRegressionWithStats alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = empty, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 0 (num_features + 1)
+  let initial_theta = randomVector i Gaussian (num_features + 1)
   let (s,w) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
   plotStats "Graphics Errors of Logistic Regression.png" w
   return $ fst s

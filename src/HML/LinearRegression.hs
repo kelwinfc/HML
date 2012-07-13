@@ -36,7 +36,7 @@ hypothesis theta x = theta <.> x
 
 (~>) :: Vector Double -> Vector Double -> Double
 (~>) values training_parameters = 
-  hypothesis (join [fromList[1],values]) training_parameters
+  hypothesis (join [(scalar 1 :: Vector Double),values]) training_parameters
 
 (<~) :: Vector Double -> Vector Double -> Double
 (<~) training_parameters values = values ~> training_parameters
@@ -52,7 +52,7 @@ linearRegressionGD alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 0 (num_features + 1)
+  let initial_theta = randomVector i Gaussian (num_features + 1)
   let (s,_) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
   fst s
 
@@ -67,7 +67,7 @@ linearRegressionGDWithStats alpha lambda tr ts num_features i = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
-  let initial_theta = constant 0 (num_features + 1)
+  let initial_theta = randomVector i Gaussian (num_features + 1)
   let (s,w) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
   plotStats "Graphics Errors of Linear Regression.png" w
   return $ fst s
@@ -88,7 +88,7 @@ trainingNE = do
   let theta = parameters lambda x y
   return theta
     where parameters r m v = (((inv $ trans m `mXm` m) `add` (reg r $ cols m)) `mXm` (trans m)) `mXv` v
-          reg a n = diag $ join [fromList [0],constant a $ n - 1] 
+          reg a n = diag $ join [(scalar 0 :: Vector Double),constant a $ n - 1] 
 
 linearRegressionNE :: Double                         -- regularization parameter
                       -> Seq (Vector Double, Double) -- training set
