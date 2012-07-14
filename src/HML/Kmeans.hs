@@ -97,6 +97,13 @@ part x ys
      | otherwise = zs : part x zs'
     where (zs, zs') = splitAt x ys
 
+{-| @initialCentroids@ Devuelve una asignacion de centroides inicial para un
+    conjunto de datos. La particion se da dividiendo uniformemente los puntos
+    entre los clusters en el orden dado.
+-}
+initialCentroids :: Int         -- ^ Numero de centroides
+                 -> [ Vector ]  -- ^ Datos a repartir
+                 -> [ Vector ]  -- ^ Centroides
 initialCentroids k p = centroids' (part l p)
     where l = (length p Prelude.+ k - 1) `div` k
           centroids' :: [ Cluster ] -> [ Vector ]
@@ -107,7 +114,11 @@ mean a = map (flip (/) r) l
     where (l,r) = foldl (\(x,n) y -> 
                   (zipWith (+) x y,n+1)) (replicate (length $ a !! 0) 0.0, 0) a
 
-kmeans :: Int -> Int -> [ Vector ] -> [ Vector ]
+{-| Implementacion paralela del algoritmo de clustering K-means -}
+kmeans :: Int           -- ^ Numero de iteraciones maximas
+       -> Int           -- ^ Numero de clusters (k)
+       -> [ Vector ]    -- ^ Conjunto de datos
+       -> [ Vector ]    -- ^ Centroides
 kmeans iterations k points = kmeans' iterations (initialCentroids k points)
                                                 (splitInThunks jobSize points)
     where jobSize = 10000
