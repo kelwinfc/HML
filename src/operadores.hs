@@ -1,18 +1,19 @@
 import HML.LogisticRegression
+import HML.PreludeHML
+import HML.Regression
 import Data.Packed.Vector
 import qualified Data.Sequence as DS
 
-d1 = (fromList [1,1],1)
-d2 = (fromList [1,0],0)
-d3 = (fromList [0,1],0)
-d4 = (fromList [0,0],0)
-
-tr = DS.fromList [d1,d2,d3,d4]
+or_tr = DS.fromList [(fromList [1,1],1),(fromList [1,0],1),(fromList [0,1],1),(fromList [0,0],0)]
+and_tr = DS.fromList [(fromList [1,1],1),(fromList [1,0],0),(fromList [0,1],0),(fromList [0,0],0)]
 
 main = do
-  let t = logisticRegression 0.05 0.0 tr 2 10
-  print t
-  print $ (fst d1)  ~> t   
-  print $ (fst d2)  ~> t 
-  print $ (fst d3)  ~> t   
-  print $ (fst d4)  ~> t 
+  let a = LogisticR $ logisticRegression 0.01 0.0 and_tr 2 10
+  let o = LogisticR $ logisticRegression 0.01 0.0 or_tr 2 10
+  
+  -- (1 and 0) or 1 = 1
+  let exp1 = [head $ [1,0] ~> a,1] ~> o
+  print exp1
+  
+  let exp2 = [head $ [1,1] ~> o,head $ [0,1] ~> o] ~> a
+  print exp2
