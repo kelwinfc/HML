@@ -1,10 +1,4 @@
-module HML.LinearRegression (linearRegression,
-                             linearRegressionGD,
-                             linearRegressionGDWithStats,
-                             linearRegressionNE,
-                             (~>),(<~),
-                             trainingSet2MatrixVector,
-                             hypothesis)
+module HML.LinearRegression
 where
 
 import Control.Monad.Reader hiding (join)
@@ -32,14 +26,13 @@ import HML.Regression
 hypothesis :: Vector Double    -- theta
               -> Vector Double -- x
               -> Double        -- h_theta(x)
-hypothesis theta x = theta <.> x
+hypothesis theta x = theta <.> x  
 
-(~>) :: Vector Double -> Vector Double -> Double
-(~>) values training_parameters = 
-  hypothesis (join [(scalar 1 :: Vector Double),values]) training_parameters
+data LinearRegression = LinearR (Vector Double)
 
-(<~) :: Vector Double -> Vector Double -> Double
-(<~) training_parameters values = values ~> training_parameters
+instance MLPredictor LinearRegression where
+  (~>) entry (LinearR theta) =
+    [hypothesis (join [scalar 1 :: Vector Double,fromList entry]) theta]
 
 linearRegressionGD :: Double                         -- learning rate
                       -> Double                      -- regularization parameter
@@ -53,8 +46,8 @@ linearRegressionGD alpha lambda tr ts num_features i = do
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = randomVector i Gaussian (num_features + 1)
-  let (s,_) = execRWS (trainingGD hypothesis costFunction) se initial_theta
-  s
+  let (s,_) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
+  fst $ s
 
 linearRegressionGDWithStats :: Double                         -- learning rate
                                -> Double                      -- regularization parameter
@@ -62,15 +55,16 @@ linearRegressionGDWithStats :: Double                         -- learning rate
                                -> Seq (Vector Double, Double) -- test set
                                -> Int                         -- number of features
                                -> Int                         -- max number of iterations
+                               -> String
                                -> IO (Vector Double)
-linearRegressionGDWithStats alpha lambda tr ts num_features i = do
+linearRegressionGDWithStats alpha lambda tr ts num_features i path = do
   let se = SupExp {training_set = tr, test_set = ts, 
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = randomVector i Gaussian (num_features + 1)
-  let (s,w) = execRWS (trainingGD hypothesis costFunction) se initial_theta
-  plotStats "Graphics Errors of Linear Regression.png" w
-  return s
+  let (s,w) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
+  plotStats path w
+  return $ fst s
 
 trainingSet2MatrixVector :: Seq (Vector Double, Double)       -- training set
                             -> (Matrix Double, Vector Double) -- desing matrix and y
