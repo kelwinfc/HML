@@ -7,6 +7,9 @@ import Test.QuickCheck.Arbitrary
 import HML.PreludeHML
 import Data.List
 
+import Control.Parallel
+import Control.Parallel.Strategies
+
 import Control.Monad.Reader hiding (join)
 import Control.Monad.RWS hiding (join)
 import Data.Sequence (Seq)
@@ -15,37 +18,36 @@ import qualified Data.Sequence as DS
 type BackPropagationExp = 
     RWS MultivalueSupExp (Seq (Double,Double)) (NeuralNetwork, Int) ()
 
-class Neuron a where
-    
-    (~>) :: [Double] -> a -> Double
-    (~>) entries neuron = neuron <~ entries
-    
-    (<~) :: a -> [Double] -> Double
-    (<~) neuron entries = entries ~> neuron
-
 data LinearUnit = LinearU [Double]
     deriving Show
 
-instance Neuron LinearUnit where
-    (~>) entries (LinearU weights) = neuralDot entries weights
+instance MLPredictor LinearUnit where
+    (~>) entries (LinearU weights) = [neuralDot entries weights]
 
 data StepUnit = StepU Double [Double]
     deriving Show
 
-instance Neuron StepUnit where
+instance MLPredictor StepUnit where
     (~>) entries (StepU theta weights) = 
-            if (neuralDot entries weights) >= theta then 1.0
-                                                    else 0.0
+            if (neuralDot entries weights) >= theta then [1.0]
+                                                    else [0.0]
 
 data SigmoidUnit = SigmoidU [Double]
     deriving Show
 
-instance Neuron SigmoidUnit where
+instance MLPredictor SigmoidUnit where
     (~>) entries (SigmoidU weights) =
-        1.0 / ( 1.0 + (exp (- (neuralDot entries weights) )))
+        [ 1.0 / ( 1.0 + (exp (- (neuralDot entries weights) ))) ]
 
 data NeuralNetwork = ANN Int [[SigmoidUnit]]
     deriving Show
+
+instance NFData NeuralNetwork
+
+instance MLPredictor NeuralNetwork where
+    (~>) a (ANN nentries hidden) = if length a == nentries
+                                      then foldl' outputLayer a hidden
+                                      else error "Numero de entradas incorrecto"
 
 --createNeuralNetork :: [Int] -> NeuralNetwork
 createNeuralNetwork (x:xs) = createNeuralNetwork' x xs
@@ -62,73 +64,27 @@ createNeuralNetwork' i (x:xs) = do
 neuralDot a b = if length a + 1 == length b then sum $ zipWith (*) (1:a) b
                                             else error "Numero incorrecto de argumentos"
 
-outputLayer :: Neuron a => [Double] -> [a] -> [Double]
-outputLayer entries = map (entries ~>)
-
-(~~>) :: [Double] -> NeuralNetwork -> [Double]
-(~~>) a (ANN nentries hidden) = foldl' outputLayer
-                                       a
-                                       hidden
-
-outputs :: [Double] -> NeuralNetwork -> [[Double]]
-outputs a (ANN ne h) = scanl outputLayer a h
-
-deltas ::  [Double]         -- Target function
-        -> [[SigmoidUnit]]  -- hidden and output Units
-        -> [[Double]]       -- Outputs
-        -> [[Double]]       -- Deltas
-
-deltas target _ [o]   = [zipWith (-) o target]--[ zipWith (\s y -> s * (1 - s) * (s - )) o target ]
-
-deltas target (wh: w_hs@(w_next:_) ) (o_h : o_hs@(o_next:_) ) =
-        (zipWith (*) accum o_aux) : delta_hs
-    
-    where delta_hs :: [[Double]]
-          delta_hs@(d_next:_) = deltas target w_hs o_hs
-          
-          o_aux :: [Double]
-          o_aux = map (\x -> x*(1-x)) o_h
-          
-          accum :: [Double]
-          accum = foldl1 (zipWith (+)) weights_times_deltas
-          
-          weights_times_deltas :: [[Double]]
-          weights_times_deltas = zipWith (\(SigmoidU (_:w) ) d -> map (*d) w)
-                                         w_next d_next
-
-xx = do
-    nn@(ANN _ units) <- createNeuralNetwork [1,2,3,2,1]
-    
-    print $ deltas [0.0] units ( tail $ outputs [0.0] nn)
-
---updateWeights :: [[Double]] -> [[Double]] -> NeuralNetwork -> NeuralNetwork
---updateWeights deltas outputs _ = error $ (show $ length deltas) ++ " " ++ (show $ length outputs)
--- updateWeights d o (ANN i w) = ANN i (map updateW (zip d (init o)))
---     where updateW (d,x) = 
--- updateWeights [] _ (ANN i _) = ANN i []
--- updateWeights deltas outputs (ANN i x) = ANN i x
---     where 
-
-getDiffs :: Double
-         -> [Double]      -- Vector de Entrada
-         -> [Double]      -- Vector de Salidas Esperadas
-         -> NeuralNetwork -- Red Neural
-         -> NeuralNetwork -- Red Neural de diferenciales de pesos
-getDiffs alpha entry target nn = ANN input_units diff
-    where (ANN input_units units) = nn
-          o = entry `outputs` nn
-          d = deltas target units (tail o)
-          odu = zipWith (\x (y,n) -> (map (\z -> (x,z,n)) y)) (init o)
-                  (map (\x -> (d,x)) units )
-          entries = init o
-          unitAndAlphaDelta = map (\(x,y) -> zip x (map (*alpha) y )) (zip units d)
-          diff = map (\(i,u) -> map 
-             (\(SigmoidU a,b) -> (SigmoidU $ map (*b) $ zipWith (*) (1:i) a)) u)
-             (zip entries unitAndAlphaDelta)
+outputLayer :: MLPredictor a => [Double] -> [a] -> [Double]
+outputLayer entries = map (\x -> head $ entries ~> x)
 
 addANN :: NeuralNetwork -> NeuralNetwork -> NeuralNetwork
 addANN (ANN i w0) (ANN _ w1) = ANN i $ (zipWith (zipWith sumUnits) w0 w1)
+    where sumUnits (SigmoidU u0) (SigmoidU u1) = SigmoidU (zipWith (+) u0 u1)
+
+subANN :: NeuralNetwork -> NeuralNetwork -> NeuralNetwork
+subANN (ANN i w0) (ANN _ w1) = ANN i $ (zipWith (zipWith sumUnits) w0 w1)
     where sumUnits (SigmoidU u0) (SigmoidU u1) = SigmoidU (zipWith (-) u0 u1)
+
+splitInThunks :: Int       -- ^ Tamaño de cada grupo
+              -> [a]       -- ^ Secuencia de datos
+              -> [[a]]     -- ^ Grupos de datos
+splitInThunks n l = unfoldr go l
+    where go xs = if null $ fst $ sp xs
+                     then Nothing
+                     else Just (sp xs)
+          sp xs = splitAt n xs
+
+annJobSize = 1000
 
 backprop :: BackPropagationExp
 backprop = do
@@ -139,20 +95,39 @@ backprop = do
     then do
         let training_s   = training config
         let test_s       = test config
-        let new_nn = foldl' (\prev_n t -> backProp' (alpha config) prev_n t) 
-                            nn training_s
         
-        let out_tr = map (\x -> x ~~> new_nn) (map fst training_s)
-        let out_ts = map (\x -> x ~~> new_nn) (map fst test_s)
-        tell $ DS.singleton (mseMatrix out_tr (map snd training_s),
-                             mseMatrix out_ts (map snd test_s)
-                            )
+        let training_thunks = splitInThunks annJobSize training_s
+        let new_nns = paralelDiffs (alpha config) nn training_thunks
+        let new_nn = foldl' addANN nn new_nns
+        
+--         let new_nn = foldl' (\prev_n t -> backProp' (alpha config) prev_n t) 
+--                             nn training_s
+        
+        let (out_tr, out_ts) = getOuts new_nn training_s test_s
+        let e@(err_tr, _) = getStats out_tr out_ts training_s test_s
+        tell $ DS.singleton e
         
         put $ (new_nn, i + 1)
         backprop
     else
         return ()
-
+    where paralelDiffs a nn [] = []
+          paralelDiffs a nn (x:xs) = p `par` q `pseq` p:q
+                where p = (subANN (joinANN a nn x) nn) `using` rdeepseq
+                      q = paralelDiffs a nn xs `using` rdeepseq
+                      
+          joinANN a orig_nn tr = foldl' (\prev_n t -> backProp' a prev_n t)
+                                         orig_nn tr
+           
+           -- Calculo de las estadisticas en paralelo para el conjunto de
+           -- entrenamiento y de pruebas
+          getOuts new_nn training_s test_s = p `par` q `pseq` (p,q)
+              where p = map (\x -> x ~> new_nn) (map fst training_s) `using` rdeepseq
+                    q = map (\x -> x ~> new_nn) (map fst test_s) `using` rdeepseq
+          getStats out_tr out_ts training_s test_s = p `par` q `pseq` (p,q)
+              where p = mseMatrix out_tr (map snd training_s) `using` rdeepseq
+                    q = mseMatrix out_ts (map snd test_s) `using` rdeepseq
+                             
 backProp' :: Double -> NeuralNetwork -> ([Double],[Double]) -> NeuralNetwork
 backProp' alpha nn@(ANN i nss) (xs,ys) = ANN i [aux (head nss) ds_hidden (1:xs),
                                                 aux (nss !! 1) ds_out (1:out_hidden)]
@@ -196,16 +171,16 @@ backpropagation plot_name a tr ts i topology = do
   let (_,(s,_),w) = runRWS backprop se (initial_nn,0)
   plotStats plot_name w
   return s
---   print $ round $ head $ [0.0,0.0] ~~> s
---   print $ round $ head $ [0.0,1.0] ~~> s
---   print $ round $ head $ [1.0,0.0] ~~> s
---   print $ round $ head $ [1.0,1.0] ~~> s
---   print $ round $ head $ [2.0,4.0] ~~> s
---   print $ round $ head $ [6.0,1.0] ~~> s
---   print $ round $ head $ [1.0,10.0] ~~> s
---   print $ round $ head $ [4.0,1.0] ~~> s
---   print $ round $ head $ [40.0,1.0] ~~> s
---   print $ round $ head $ [1.0,40.0] ~~> s
+--   print $ round $ head $ [0.0,0.0] ~> s
+--   print $ round $ head $ [0.0,1.0] ~> s
+--   print $ round $ head $ [1.0,0.0] ~> s
+--   print $ round $ head $ [1.0,1.0] ~> s
+--   print $ round $ head $ [2.0,4.0] ~> s
+--   print $ round $ head $ [6.0,1.0] ~> s
+--   print $ round $ head $ [1.0,10.0] ~> s
+--   print $ round $ head $ [4.0,1.0] ~> s
+--   print $ round $ head $ [40.0,1.0] ~> s
+--   print $ round $ head $ [1.0,40.0] ~> s
   
 
 andTr = [ ([i,j], [if i < j then 0.0 else 1.0]) | i <- [fromIntegral 0.. fromIntegral 10] , j <- [fromIntegral  0.. fromIntegral 10] ]
@@ -216,8 +191,3 @@ andTs = andTr
 --          ([1.0,1.0],[1.0])
 --         ]
 x = backpropagation "" 0.6 andTr andTs 100 [2,10,1]
-
-y = do
-    nn <- createNeuralNetwork [1,3,1]
-    print $ nn
-    print $ outputs [1.0] nn
