@@ -21,7 +21,8 @@ import Test.QuickCheck.Arbitrary
 
 import HML.PreludeHML
 
-type RegressionMonadGD = RWS SupervisedExperiment (Seq(Double,Double)) (Vector Double) () 
+
+type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
 trainingGD :: (Vector Double -> Vector Double -> Double) 
             -> (Vector Double 
@@ -31,16 +32,26 @@ trainingGD :: (Vector Double -> Vector Double -> Double)
             -> RegressionMonadGD
 trainingGD h c = do
   data_training <- ask
-  theta <- get
+  (theta,i) <- get
   let it = iterations data_training
-  let alpha  = learning_rate data_training
-  let lambda = regularization_parameter data_training
-  let trs    = DR.fmap one (training_set data_training)
-  let tss    = DR.fmap one (test_set data_training)  
-  let s = dim theta  
-  let (new_theta,_) = minimizeV NMSimplex2 (10 ** (-3)) it (constant 1 s)
+  if it /= 0 && i < it 
+    then do
+      let alpha  = learning_rate data_training
+      let lambda = regularization_parameter data_training
+      let trs    = DR.fmap one (training_set data_training)
+      let tss    = DR.fmap one (test_set data_training)  
+      let s = dim theta  
+      let (new_theta,_) = minimizeV NMSimplex2 (10 ** (-3)) 1 (constant 1 s)
                           (\th -> c th h trs) theta
-  put new_theta
+      let (h_trs,y_trs) = unzipSeq $ DR.fmap (h' new_theta) trs
+      let (h_tss,y_tss) = unzipSeq $ DR.fmap (h' new_theta) tss
+      tell $ DS.singleton $ (mse h_trs y_trs, mse h_tss y_tss)
+      put (new_theta,i + 1)
+      trainingGD h c
+    else 
+      return ()
+  where h' t (x,y) = (h x t,y)
+        unzipSeq s = (DR.fmap fst s, DR.fmap snd s)
           
 one :: (Vector Double, Double) 
        -> (Vector Double, Double)
