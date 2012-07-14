@@ -1,4 +1,9 @@
-module HML.Regression where
+-- | Implementacion de las funciones y tipos necesarios para la aplicacion de los algoritmos de regresion
+
+module HML.Regression (trainingGD,
+                       RegressionMonadGD,
+                       one)
+       where
 
 import Data.Packed.Vector
 import Numeric.LinearAlgebra
@@ -21,14 +26,22 @@ import Test.QuickCheck.Arbitrary
 
 import HML.PreludeHML
 
-
+{-| 
+@RegressionMonadGD@ transformador monadico usado para el computo de los metodos de regresion para el entrenamiento de
+maquinas manteniendo sus datos dados, acarreando errores para posible graficacion y cambiando el estado de los 
+parametros e iteraciones.
+-}
 type RegressionMonadGD = RWS SupervisedExperiment (Seq (Double,Double)) (Vector Double,Int) ()
 
-trainingGD :: (Vector Double -> Vector Double -> Double) 
-            -> (Vector Double 
-                -> (Vector Double -> Vector Double -> Double) 
+trainingGD :: (Vector Double 
+               -> Vector Double 
+               -> Double              )      -- ^ funcion de hipotesis
+            -> (Vector Double                              
+                -> (Vector Double 
+                    -> Vector Double 
+                    -> Double)               
                 -> Seq (Vector Double, Double) 
-                -> Double)
+                -> Double)                   -- ^ funcion de costos
             -> RegressionMonadGD
 trainingGD h c = do
   data_training <- ask
@@ -53,6 +66,9 @@ trainingGD h c = do
   where h' t (x,y) = (h x t,y)
         unzipSeq s = (DR.fmap fst s, DR.fmap snd s)
           
+{-|
+@one@ funcion para aniadir la coordenada 1 a los vectores del training set.
+-}
 one :: (Vector Double, Double) 
        -> (Vector Double, Double)
 one (x,y) = (join [(scalar 1 :: Vector Double),x],y)
