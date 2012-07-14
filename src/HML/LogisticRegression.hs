@@ -1,5 +1,4 @@
 module HML.LogisticRegression (logisticRegression,
-                               logisticRegressionWithStats,
                                (~>),(<~)) 
 where
 
@@ -45,30 +44,13 @@ logisticRegression alpha lambda tr num_features i = do
                    learning_rate = alpha, regularization_parameter = lambda,
                    iterations = i}
   let initial_theta = randomVector i Gaussian (num_features + 1)
-  let (s,_) = execRWS (trainingGD hypothesis costFunction)  se (initial_theta,0)
-  fst s
+  let (s,_) = execRWS (trainingGD hypothesis costFunction)  se initial_theta
+  s
   
-
-logisticRegressionWithStats :: Double 
-                               -> Double 
-                               -> Seq (Vector Double, Double) 
-                               -> Seq (Vector Double, Double)                                                      
-                               -> Int 
-                               -> Int
-                               -> IO(Vector Double)
-logisticRegressionWithStats alpha lambda tr ts num_features i = do
-  let se = SupExp {training_set = tr, test_set = empty, 
-                   learning_rate = alpha, regularization_parameter = lambda,
-                   iterations = i}
-  let initial_theta = randomVector i Gaussian (num_features + 1)
-  let (s,w) = execRWS (trainingGD hypothesis costFunction) se (initial_theta,0)
-  plotStats "Graphics Errors of Logistic Regression.png" w
-  return $ fst s
-
 costFunction :: Vector Double -- thetas
                 -> (Vector Double -> Vector Double -> Double)
                 -> Seq (Vector Double, Double)
                 -> Double
 costFunction th h tr = (1 / toEnum (m)) * (DF.sum $ DR.fmap cost tr)
   where m = DS.length tr
-        cost (x,y) = (-y) * log ((h th x) - ((1 - y) * log(1 - (h th x))))
+        cost (x,y) = (-y * log(h th x)) - ((1 - y) * log(1 - (h th x)))
