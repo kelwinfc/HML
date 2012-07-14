@@ -27,28 +27,47 @@ dumpData filepath p (n,m) = do
                             ++ (concat $ intersperse "\n" $
                         map (concat . intersperse " " . (map (show.round))) p))
 
-main = do
-    args <- getArgs
-    imgs <- loadData (head args)
+do_experiment k file_data file_stats rate iterations = do
+    imgs <- loadData file_data
     
     -- Cargar datos
-    let (training_set, test_set) = splitAt (length imgs `div` 2) imgs
+    let (training_set, test_set) = getTrainingAndTestSets imgs rate
     
     -- Entrenar
-    neural_network <- backpropagation "experimento.png"
-                                     0.05 training_set test_set 200
+    neural_network <- backpropagation file_stats
+                                     0.6 training_set test_set iterations
                                      [length $ fst $ training_set !! 0,
-                                      10,
+                                      k,
                                       length $ snd $ training_set !! 0]
     
     -- Reportar porcentaje de clasificacion
-    let classif  = map (\(x,y) -> (x ~~> neural_network, y)) training_set
-    let _error   = map (\(x,y) -> (map round x , map round y)) classif
-    let rate     = filter (\(x,y) -> x == y) _error
+    let ts_classif  = map (\(x,y) -> (x ~> neural_network, y)) test_set
+    let ts_error   = map (\(x,y) -> (map round x , map round y)) ts_classif
+    let ts_rate     = filter (\(x,y) -> x == y) ts_error
     
-    putStr "Rate: "
-    putStr $ show $ (fromIntegral (length rate))*100.0 / 
-                     (fromIntegral (length classif)
-                    )
+    let tr_classif  = map (\(x,y) -> (x ~> neural_network, y)) training_set
+    let tr_error   = map (\(x,y) -> (map round x , map round y)) tr_classif
+    let tr_rate     = filter (\(x,y) -> x == y) tr_error
+    
+    putStr "    Training Rate: "
+    putStr $ show $ (fromIntegral (length tr_rate))*100.0 / 
+                     (fromIntegral (length tr_classif))
     putStrLn "%"
     
+    putStr "    Test Rate: "
+    putStr $ show $ (fromIntegral (length ts_rate))*100.0 / 
+                    (fromIntegral (length ts_classif))
+    putStrLn "%"
+
+main = do
+    putStrLn "Experimento de la función <"
+    do_experiment 100 "../test/minmax.data" "experimento_menor.png" 75 5
+    putStrLn ""
+    
+    putStrLn "Experimento de la función circulo"
+    do_experiment 10 "../test/circle.data" "experimento_circulo.png" 10 100
+    putStrLn ""
+    
+    putStrLn "Experimento de la función par"
+    do_experiment 1 "../test/par.data" "experimento_par.png" 100 50
+    putStrLn ""
